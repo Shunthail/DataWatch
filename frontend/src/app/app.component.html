@@ -1,0 +1,746 @@
+<div class="site-sheet">
+  <header class="masthead">
+    <div class="top-line">
+      <span>DATAWATCH / VEILLE DES DONNÉES</span
+      ><span>connecté : <b>admin</b></span>
+    </div>
+    <div class="brand-row">
+      <a
+        class="brand"
+        href="#"
+        (click)="$event.preventDefault(); navigate('alerts')"
+        >DATA<span>WATCH</span><sup>↗</sup></a
+      >
+      <div class="status-sticker" [class.offline]="!connected()">
+        <i></i><strong>{{ connected() ? "EN VEILLE" : "HORS LIGNE" }}</strong
+        ><span>{{
+          lastCollection()
+            ? "collecte à " + (lastCollection() | date: "HH:mm")
+            : "en attente de sources"
+        }}</span>
+      </div>
+    </div>
+    <p class="site-description">
+      Repérer ses données dans les publications publiques. Garder une trace.
+      Faire le tri.
+    </p>
+    <nav aria-label="Navigation principale">
+      <button [class.active]="view() === 'alerts'" (click)="navigate('alerts')">
+        01 / Signalements <b>{{ data().alerts.length }}</b></button
+      ><button
+        [class.active]="view() === 'sources'"
+        (click)="navigate('sources')"
+      >
+        02 / Sources <b>{{ data().sources.length }}</b></button
+      ><button [class.active]="view() === 'rules'" (click)="navigate('rules')">
+        03 / Règles <b>{{ data().rules.length }}</b></button
+      ><button
+        [class.active]="view() === 'history'"
+        (click)="navigate('history')"
+      >
+        04 / Journal
+      </button>
+    </nav>
+  </header>
+  <div class="notice" *ngIf="message()" role="status">
+    <span>→ {{ message() }}</span
+    ><button (click)="message.set('')" aria-label="Fermer le message">×</button>
+  </div>
+  <main class="workbench" *ngIf="view() === 'alerts'">
+    <section class="clippings">
+      <div class="section-heading">
+        <div>
+          <span class="handwritten">le carnet de veille</span>
+          <h1>Les signalements<span class="heading-dot">.</span></h1>
+        </div>
+        <button class="plain-link" (click)="exportData()">Exporter ↓</button>
+      </div>
+      <div class="board-tools">
+        <label class="search"
+          ><span>⌕</span
+          ><input
+            aria-label="Rechercher un signalement"
+            placeholder="Chercher dans le carnet…"
+            [ngModel]="search()"
+            (ngModelChange)="search.set($event)" /></label
+        ><button
+          class="refresh-button"
+          (click)="refresh()"
+          aria-label="Actualiser"
+        >
+          ↻
+        </button>
+      </div>
+      <div class="board-filters">
+        <select
+          aria-label="Dossier de traitement"
+          [ngModel]="statusFilter()"
+          (ngModelChange)="statusFilter.set($event)"
+        >
+          <option value="all">Tous les statuts</option>
+          <option value="new">À examiner</option>
+          <option value="reviewing">En cours</option>
+          <option value="resolved">Clôturés</option></select
+        ><select
+          aria-label="Sévérité"
+          [ngModel]="severityFilter()"
+          (ngModelChange)="severityFilter.set($event)"
+        >
+          <option value="all">Tous les niveaux</option>
+          <option value="critical">Critique</option>
+          <option value="high">Élevée</option>
+          <option value="medium">Modérée</option>
+          <option value="low">Faible</option></select
+        ><span>{{ filteredAlerts().length }} résultat(s)</span>
+      </div>
+      <div class="clipping-grid">
+        <button
+          class="clipping"
+          *ngFor="let alert of filteredAlerts()"
+          (click)="selectedId.set(alert.id)"
+        >
+          <div class="clipping-meta">
+            <span>DW-{{ alert.id | number: "4.0-0" }}</span
+            ><span>{{ alert.created_at | date: "dd.MM.yy" }}</span>
+          </div>
+          <span [class]="'severity-tag ' + alert.severity">{{
+            severityLabels[alert.severity]
+          }}</span>
+          <h2>{{ alert.title }}</h2>
+          <p>{{ alert.excerpt }}</p>
+          <div class="clipping-source">
+            {{ alert.source_name }} / {{ alert.rule_label }}
+          </div>
+          <div class="clipping-bottom">
+            <span>{{ statusLabels[alert.status] }}</span
+            ><span>Lire le dossier ↗</span>
+          </div>
+        </button>
+      </div>
+      <div class="zero-board" *ngIf="!filteredAlerts().length">
+        <div class="zero-title">
+          <span>{{
+            loading() ? "ON" : data().alerts.length ? "PAS DE" : "RIEN"
+          }}</span
+          ><span>{{
+            loading()
+              ? "REGARDE"
+              : data().alerts.length
+                ? "RÉSULTAT"
+                : "À SIGNALER"
+          }}</span
+          ><svg class="eye-doodle" viewBox="0 0 210 100" aria-hidden="true">
+            <path
+              d="M7 49Q49 1 94 49Q51 97 7 49M109 49Q153 1 199 49Q155 97 109 49"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+            />
+            <circle cx="53" cy="49" r="14" fill="currentColor" />
+            <circle cx="156" cy="49" r="14" fill="#ee673e" />
+            <path
+              d="m38 12-4-10m28 10 3-10m76 10-4-10m29 10 4-10M96 86l15 3"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+            />
+          </svg>
+        </div>
+        <div class="zero-copy">
+          <span class="tiny-label">{{
+            data().alerts.length ? "RECHERCHE" : "CARNET VIDE"
+          }}</span>
+          <p>
+            {{
+              data().alerts.length
+                ? "Aucune publication ne correspond aux filtres. Essaie une autre recherche."
+                : "Pas encore de détection. Ajoute une règle et une source : les correspondances arriveront ici."
+            }}
+          </p>
+          <button
+            class="button primary"
+            *ngIf="!data().alerts.length"
+            (click)="openDialog('rule')"
+          >
+            ＋ Ajouter ma première règle</button
+          ><small>Les extraits enregistrés sont masqués.</small>
+        </div>
+      </div>
+      <div class="board-foot">
+        <span>PUBLICATIONS PUBLIQUES UNIQUEMENT</span
+        ><span>{{
+          connected() ? "● synchronisation active" : "○ connexion en cours"
+        }}</span>
+      </div>
+    </section>
+    <aside class="notes-column">
+      <section class="sticky-note">
+        <span class="tape"></span>
+        <h2>
+          {{
+            activeRules().length && activeSources().length
+              ? "Surveillance"
+              : "Pour commencer"
+          }}
+        </h2>
+        <button class="check-row" (click)="openDialog('rule')">
+          <span class="check-box">{{ activeRules().length ? "×" : "" }}</span>
+          <div>
+            <strong>Ce qu’on cherche</strong
+            ><small>{{ activeRules().length }} règle(s) active(s)</small>
+          </div>
+          <span>↗</span></button
+        ><button class="check-row" (click)="openDialog('source')">
+          <span class="check-box">{{ activeSources().length ? "×" : "" }}</span>
+          <div>
+            <strong>Où on regarde</strong
+            ><small>{{ activeSources().length }} source(s) active(s)</small>
+          </div>
+          <span>↗</span>
+        </button>
+        <div class="note-scribble">
+          {{
+            data().alerts.length
+              ? data().alerts.length + " correspondance(s)"
+              : "domaines, noms, e-mails…"
+          }}<span>{{
+            data().alerts.length
+              ? "↳ dans le carnet de veille."
+              : "↳ à toi de choisir."
+          }}</span>
+        </div>
+      </section>
+      <section class="pinned-rules">
+        <div>
+          <h2>À surveiller</h2>
+          <button aria-label="Ajouter une règle" (click)="openDialog('rule')">
+            ＋
+          </button>
+        </div>
+        <button
+          class="rule-scrap"
+          *ngFor="let rule of activeRules().slice(0, 5)"
+          (click)="filterByRule(rule.label)"
+        >
+          <span>#</span><strong>{{ rule.label }}</strong
+          ><small>{{ rule.value }}</small>
+        </button>
+        <p *ngIf="!activeRules().length">Rien d’épinglé pour l’instant.</p>
+        <button class="plain-link" (click)="navigate('rules')">
+          Voir toutes les règles →
+        </button>
+      </section>
+      <div class="privacy-stamp">
+        <span>DONNÉES SENSIBLES</span><strong>MASQUÉES</strong
+        ><span>AVANT ENREGISTREMENT</span>
+      </div>
+      <p class="margin-note">
+        Une correspondance n’est pas une preuve de fuite. Il faut lire le
+        contexte.
+      </p>
+    </aside>
+  </main>
+  <main class="settings-view" *ngIf="view() !== 'alerts'">
+    <div class="section-heading">
+      <div>
+        <span class="handwritten">le carnet de veille</span>
+        <h1>{{ titles[view()] }}<span class="heading-dot">.</span></h1>
+        <p>{{ descriptions[view()] }}</p>
+      </div>
+      <button
+        class="button primary"
+        *ngIf="view() !== 'history'"
+        (click)="openDialog(view() === 'rules' ? 'rule' : 'source')"
+      >
+        ＋ {{ view() === "rules" ? "Nouvelle règle" : "Ajouter une source" }}
+      </button>
+    </div>
+    <section class="settings-content">
+      <ng-container *ngIf="view() === 'sources'">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="square-icon">◎</span>
+            <h2>Répertoire des sources</h2>
+            <span class="count">{{ data().sources.length }}</span>
+          </div>
+          <button
+            class="button secondary compact"
+            [disabled]="!activeSources().length || busy()"
+            (click)="scan()"
+          >
+            ↻ Collecter maintenant
+          </button>
+        </div>
+        <div class="filters">
+          <label class="search"
+            ><span>⌕</span
+            ><input
+              aria-label="Rechercher une source"
+              placeholder="Nom ou URL de la source…"
+              [ngModel]="search()"
+              (ngModelChange)="search.set($event)" /></label
+          ><span class="subtle-label">RSS / ATOM · JSON · TEXTE</span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>SOURCE</th>
+                <th>FORMAT</th>
+                <th>ÉTAT</th>
+                <th>PUBLICATIONS</th>
+                <th>DERNIÈRE COLLECTE</th>
+                <th>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let source of filteredSources()">
+                <td>
+                  <div class="source-identity">
+                    <span class="source-glyph">↗</span>
+                    <div>
+                      <strong>{{ source.name }}</strong
+                      ><a
+                        [href]="source.url"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        referrerpolicy="no-referrer"
+                        >{{ domain(source.url) }}</a
+                      ><small class="source-error" *ngIf="source.last_error">{{
+                        source.last_error
+                      }}</small>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <span class="format-label">{{
+                    source.format === "rss"
+                      ? "RSS / ATOM"
+                      : (source.format | uppercase)
+                  }}</span>
+                </td>
+                <td>
+                  <span
+                    class="source-status"
+                    [class.error]="
+                      source.enabled && source.last_status === 'error'
+                    "
+                    [class.paused]="!source.enabled"
+                    ><i></i>{{ sourceStatus(source) }}</span
+                  >
+                </td>
+                <td class="mono">{{ source.entry_count }}</td>
+                <td class="date-cell">
+                  {{
+                    source.last_checked
+                      ? (source.last_checked | date: "dd/MM · HH:mm")
+                      : "—"
+                  }}
+                </td>
+                <td>
+                  <div class="row-actions">
+                    <button
+                      class="icon-button"
+                      [disabled]="!source.enabled || busy()"
+                      (click)="scan(source)"
+                      [attr.aria-label]="'Collecter ' + source.name"
+                    >
+                      ↻</button
+                    ><button
+                      class="small-button"
+                      [disabled]="busy()"
+                      (click)="toggle('sources', source.id, !source.enabled)"
+                    >
+                      {{ source.enabled ? "Pause" : "Activer" }}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="empty-state short" *ngIf="!filteredSources().length">
+          <span class="empty-code">AUCUNE SOURCE</span>
+          <h3>Choisissez où regarder.</h3>
+          <p>
+            Ajoutez le flux public d’un forum, une publication ou une page
+            texte.
+          </p>
+          <button class="button secondary" (click)="openDialog('source')">
+            ＋ Ajouter une source
+          </button>
+        </div>
+        <div class="panel-footer">
+          <span>{{ activeSources().length }} source(s) active(s)</span
+          ><span>Aucun accès aux espaces privés ou authentifiés.</span>
+        </div>
+      </ng-container>
+      <ng-container *ngIf="view() === 'rules'">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="square-icon">⌘</span>
+            <h2>Périmètre de détection</h2>
+            <span class="count">{{ data().rules.length }}</span>
+          </div>
+          <span class="subtle-label"
+            >{{ activeRules().length }} RÈGLE(S) ACTIVE(S)</span
+          >
+        </div>
+        <div class="filters">
+          <label class="search"
+            ><span>⌕</span
+            ><input
+              aria-label="Rechercher une règle"
+              placeholder="Nom ou expression surveillée…"
+              [ngModel]="search()"
+              (ngModelChange)="search.set($event)"
+          /></label>
+        </div>
+        <div class="rules-list">
+          <article
+            class="rule-item"
+            *ngFor="let rule of filteredRules()"
+            [class.paused]="!rule.enabled"
+          >
+            <div class="rule-symbol">
+              {{
+                rule.kind === "domain"
+                  ? "www"
+                  : rule.kind === "email"
+                    ? "@"
+                    : "Aa"
+              }}
+            </div>
+            <div class="rule-body">
+              <div class="rule-heading">
+                <h3>{{ rule.label }}</h3>
+                <span [class]="'severity-tag ' + rule.severity">{{
+                  severityLabels[rule.severity]
+                }}</span>
+              </div>
+              <code>{{ rule.value }}</code>
+              <p>
+                {{
+                  rule.kind === "domain"
+                    ? "Domaine et sous-domaines"
+                    : rule.kind === "email"
+                      ? "Adresse exacte"
+                      : "Expression littérale"
+                }}
+                · {{ rule.enabled ? "Surveillance active" : "En pause" }}
+              </p>
+            </div>
+            <button
+              class="small-button"
+              [disabled]="busy()"
+              (click)="toggle('rules', rule.id, !rule.enabled)"
+            >
+              {{ rule.enabled ? "Mettre en pause" : "Activer" }}
+            </button>
+          </article>
+        </div>
+        <div class="empty-state short" *ngIf="!filteredRules().length">
+          <span class="empty-code">PÉRIMÈTRE NON DÉFINI</span>
+          <h3>Ce qui compte pour vous.</h3>
+          <p>
+            Surveillez un nom d’entreprise, un domaine ou une adresse e-mail
+            précise.
+          </p>
+          <button class="button secondary" (click)="openDialog('rule')">
+            ＋ Créer une règle
+          </button>
+        </div>
+        <div class="rule-explainer">
+          <span>i</span>
+          <p>
+            Le niveau défini sert de seuil initial. La présence d’un téléphone
+            ou d’un e-mail élève le signalement au niveau modéré ; un secret
+            potentiel peut déclencher une alerte élevée ou critique.
+          </p>
+        </div>
+      </ng-container>
+      <ng-container *ngIf="view() === 'history'">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="square-icon">◷</span>
+            <h2>Derniers événements</h2>
+            <span class="count">{{ filteredActivity().length }}</span>
+          </div>
+          <button class="button secondary compact" (click)="refresh()">
+            ↻ Actualiser
+          </button>
+        </div>
+        <div class="filters">
+          <label class="search"
+            ><span>⌕</span
+            ><input
+              aria-label="Rechercher un événement"
+              placeholder="Rechercher dans le journal…"
+              [ngModel]="search()"
+              (ngModelChange)="search.set($event)"
+          /></label>
+        </div>
+        <div class="timeline">
+          <article *ngFor="let item of filteredActivity()">
+            <span
+              class="timeline-dot"
+              [class.error]="item.kind === 'error'"
+            ></span
+            ><time>{{ item.created_at | date: "dd MMM · HH:mm:ss" }}</time
+            ><span class="event-kind">{{
+              item.kind === "scan"
+                ? "COLLECTE"
+                : item.kind === "source"
+                  ? "SOURCE"
+                  : item.kind === "rule"
+                    ? "RÈGLE"
+                    : item.kind === "alert"
+                      ? "TRAITEMENT"
+                      : item.kind === "error"
+                        ? "ERREUR"
+                        : "CONFIGURATION"
+            }}</span>
+            <p>{{ item.message }}</p>
+          </article>
+        </div>
+        <div class="empty-state short" *ngIf="!filteredActivity().length">
+          <span class="empty-code">JOURNAL VIDE</span>
+          <h3>Chaque action laisse une trace.</h3>
+          <p>
+            Les collectes et les changements de configuration seront conservés
+            ici.
+          </p>
+        </div>
+        <div class="panel-footer">
+          <span>Les 2 000 derniers événements sont affichés.</span
+          ><span>Horaires locaux</span>
+        </div>
+      </ng-container>
+    </section>
+  </main>
+  <footer>
+    <strong>DATAWATCH ↗</strong
+    ><span>un carnet de veille sur les sources publiques</span
+    ><button (click)="refresh()">Actualiser ↻</button>
+  </footer>
+</div>
+<div
+  class="case-backdrop"
+  *ngIf="selected() as alert"
+  (click)="selectedId.set(null)"
+>
+  <article
+    class="case-sheet"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="case-title"
+    (click)="$event.stopPropagation()"
+  >
+    <div class="case-toolbar">
+      <span>DOSSIER DW-{{ alert.id | number: "4.0-0" }}</span
+      ><button aria-label="Fermer le dossier" (click)="selectedId.set(null)">
+        ×
+      </button>
+    </div>
+    <span [class]="'severity-tag ' + alert.severity">{{
+      severityLabels[alert.severity]
+    }}</span>
+    <h1 id="case-title">{{ alert.title }}</h1>
+    <dl>
+      <div>
+        <dt>Source</dt>
+        <dd>{{ alert.source_name }}</dd>
+      </div>
+      <div>
+        <dt>Règle</dt>
+        <dd>{{ alert.rule_label }}</dd>
+      </div>
+      <div>
+        <dt>Détecté le</dt>
+        <dd>{{ alert.created_at | date: "dd/MM/yyyy à HH:mm" }}</dd>
+      </div>
+    </dl>
+    <h2>Extrait de la publication</h2>
+    <pre>{{ alert.excerpt }}</pre>
+    <div class="signal-labels">
+      <span *ngFor="let signal of alert.signals">{{ signal }}</span>
+    </div>
+    <p class="review-note">
+      Les valeurs sensibles détectées sont masquées. Vérifie le contexte avant
+      de conclure à une exposition.
+    </p>
+    <a
+      class="plain-link"
+      [href]="alert.url"
+      target="_blank"
+      rel="noopener noreferrer"
+      referrerpolicy="no-referrer"
+      >Ouvrir la publication d’origine ↗</a
+    >
+    <div class="case-treatment">
+      <label for="alert-status">Traitement</label
+      ><select
+        id="alert-status"
+        [ngModel]="alert.status"
+        (ngModelChange)="changeStatus(alert, $event)"
+        [disabled]="busy()"
+      >
+        <option value="new">À examiner</option>
+        <option value="reviewing">En cours</option>
+        <option value="resolved">Clôturé</option>
+      </select>
+    </div>
+  </article>
+</div>
+<div
+  class="modal-backdrop"
+  *ngIf="dialog() as type"
+  (click)="!busy() && dialog.set(null)"
+>
+  <section
+    class="modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="dialog-title"
+    (click)="$event.stopPropagation()"
+  >
+    <div class="modal-top">
+      <span>{{
+        type === "source" ? "CONFIGURATION / SOURCE" : "CONFIGURATION / RÈGLE"
+      }}</span
+      ><button
+        class="icon-button"
+        aria-label="Fermer"
+        [disabled]="busy()"
+        (click)="dialog.set(null)"
+      >
+        ×
+      </button>
+    </div>
+    <h2 id="dialog-title">
+      {{ type === "source" ? "Ajouter une source" : "Créer une règle" }}
+    </h2>
+    <p class="modal-description">
+      {{
+        type === "source"
+          ? "Ajoutez une source publique dont la consultation est autorisée. Le flux sera collecté après l’enregistrement."
+          : "Définissez précisément l’expression à rechercher. La règle sera appliquée aux prochaines collectes."
+      }}
+    </p>
+    <form (ngSubmit)="save()">
+      <ng-container *ngIf="type === 'source'"
+        ><label for="source-name">Nom de la source</label
+        ><input
+          id="source-name"
+          name="sourceName"
+          [(ngModel)]="sourceDraft.name"
+          placeholder="Forum public — actualités"
+          maxlength="80"
+          required
+        /><label for="source-url">URL publique</label
+        ><input
+          id="source-url"
+          name="sourceUrl"
+          [(ngModel)]="sourceDraft.url"
+          placeholder="https://forum.example.org/feed.xml"
+          type="url"
+          maxlength="1500"
+          required
+        /><label for="source-format">Format</label
+        ><select
+          id="source-format"
+          name="sourceFormat"
+          [(ngModel)]="sourceDraft.format"
+        >
+          <option value="rss">RSS / Atom</option>
+          <option value="json">JSON (items / entries)</option>
+          <option value="text">Texte / HTML public</option>
+        </select>
+        <div class="form-hint">
+          Les sources authentifiées et les adresses réseau privées ne sont pas
+          acceptées. La collecte lit jusqu’à 100 publications et 1 Mo par
+          requête.
+        </div></ng-container
+      >
+      <ng-container *ngIf="type === 'rule'"
+        ><label for="rule-name">Nom de la règle</label
+        ><input
+          id="rule-name"
+          name="ruleName"
+          [(ngModel)]="ruleDraft.label"
+          placeholder="Domaine de l’entreprise"
+          maxlength="80"
+          required
+        />
+        <div class="form-row">
+          <div>
+            <label for="rule-type">Type de correspondance</label
+            ><select
+              id="rule-type"
+              name="ruleKind"
+              [(ngModel)]="ruleDraft.kind"
+            >
+              <option value="domain">Domaine</option>
+              <option value="email">Adresse e-mail</option>
+              <option value="keyword">Expression</option>
+            </select>
+          </div>
+          <div>
+            <label for="rule-severity">Niveau initial</label
+            ><select
+              id="rule-severity"
+              name="ruleSeverity"
+              [(ngModel)]="ruleDraft.severity"
+            >
+              <option value="low">Faible</option>
+              <option value="medium">Modéré</option>
+              <option value="high">Élevé</option>
+              <option value="critical">Critique</option>
+            </select>
+          </div>
+        </div>
+        <label for="rule-value">{{
+          ruleDraft.kind === "domain"
+            ? "Domaine à surveiller"
+            : ruleDraft.kind === "email"
+              ? "Adresse à surveiller"
+              : "Expression à surveiller"
+        }}</label
+        ><input
+          id="rule-value"
+          name="ruleValue"
+          [(ngModel)]="ruleDraft.value"
+          [type]="ruleDraft.kind === 'email' ? 'email' : 'text'"
+          [placeholder]="
+            ruleDraft.kind === 'domain'
+              ? 'entreprise.fr'
+              : ruleDraft.kind === 'email'
+                ? 'contact@entreprise.fr'
+                : 'Nom de l’entreprise'
+          "
+          maxlength="150"
+          required
+        />
+        <div class="form-hint">
+          La correspondance ignore la casse. Les expressions sont littérales ;
+          les règles de domaine incluent les sous-domaines.
+        </div></ng-container
+      >
+      <div class="form-error" role="alert" *ngIf="message()">
+        {{ message() }}
+      </div>
+      <div class="modal-actions">
+        <button
+          class="button secondary"
+          type="button"
+          [disabled]="busy()"
+          (click)="dialog.set(null)"
+        >
+          Annuler</button
+        ><button class="button primary" [disabled]="busy()">
+          {{ busy() ? "Enregistrement…" : "Enregistrer →" }}
+        </button>
+      </div>
+    </form>
+  </section>
+</div>
